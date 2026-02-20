@@ -151,6 +151,12 @@ if mode == "Single option":
         st.subheader("Theta Profile")
         st.line_chart(df_greeks[["Theta"]], use_container_width=True)
 
+        st.subheader("Vanna Profile (Delta-Volatility)")
+        st.line_chart(df_greeks[["Vanna"]], use_container_width=True)
+
+        st.subheader("Charm Profile (Delta-Time)")
+        st.line_chart(df_greeks[["Charm"]], use_container_width=True)
+
     with col2:
         st.subheader("Vega Profile")
         st.line_chart(df_greeks[["Vega"]], use_container_width=True)
@@ -160,6 +166,9 @@ if mode == "Single option":
 
         st.subheader("Rho Profile")
         st.line_chart(df_greeks[["Rho"]], use_container_width=True)
+
+        st.subheader("Volga Profile (Vega-Volatility)")
+        st.line_chart(df_greeks[["Volga"]], use_container_width=True)
 
 # =========================
 # MODE 2 & 3: Strategy (Classic & Exotic)
@@ -176,9 +185,10 @@ else:
 
     Ss = build_spot_grid(S, s_min=1.0, s_max=300.0, width=0.6, n_pts=200)
     df = build_portfolio_profile_vs_spot(legs=legs, Ss=Ss, r=r, q=q, sigma=sigma)
+    df = df * global_sign
 
     # --- Payoff at maturity (Strategy) ---
-    payoff = portfolio_payoff(legs=legs, Ss=Ss)
+    payoff = [global_sign * p for p in portfolio_payoff(legs=legs, Ss=Ss)]
 
     df_premium_payoff = pd.DataFrame(
         {"Premium": df["Premium"].values, "Payoff": payoff},
@@ -190,21 +200,30 @@ else:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("Premium and Payoff Profile (Strategy)")
+        st.subheader("Premium and Payoff Profile")
         st.line_chart(df_premium_payoff, use_container_width=True)
 
-        st.subheader("Delta Profile (Strategy)")
+        st.subheader("Delta Profile")
         st.line_chart(df[["Delta"]], use_container_width=True)
 
-        st.subheader("Theta Profile (Strategy)")
+        st.subheader("Theta Profile")
         st.line_chart(df[["Theta"]], use_container_width=True)
 
+        st.subheader("Vanna Profile (Delta-Volatility)")
+        st.line_chart(df[["Vanna"]], use_container_width=True)
+
+        st.subheader("Charm Profile (Delta-Time)")
+        st.line_chart(df[["Charm"]], use_container_width=True)
+
     with col2:
-        st.subheader("Vega Profile (Strategy)")
+        st.subheader("Vega Profile")
         st.line_chart(df[["Vega"]], use_container_width=True)
 
-        st.subheader("Gamma Profile (Strategy)")
+        st.subheader("Gamma Profile")
         st.line_chart(df[["Gamma"]], use_container_width=True)
 
-        st.subheader("Rho Profile (Strategy)")
+        st.subheader("Rho Profile")
         st.line_chart(df[["Rho"]], use_container_width=True)
+
+        st.subheader("Volga Profile (Vega-Volatility)")
+        st.line_chart(df[["Volga"]], use_container_width=True)

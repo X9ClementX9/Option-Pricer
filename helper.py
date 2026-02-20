@@ -78,13 +78,17 @@ def bs_greeks(option_type, S, K, r, q, sigma, T):
     else:
         rho = -K * T * disc_r * norm_cdf(-d2)
 
-    return {
+    greeks = {
         "Delta": delta,
         "Gamma": gamma,
         "Vega": vega,
         "Theta": theta,
         "Rho": rho
     }
+    fn = lambda s, v, t: bs_price(option_type, s, K, r, q, v, t)
+    so = _numerical_second_order(fn, S, sigma, T)
+    greeks.update(so)
+    return greeks
 
 # -------- Digital (cash-or-nothing) Options ---------
 def bs_price_digital(option_type, S, K, r, q, sigma, T):
@@ -96,6 +100,31 @@ def bs_price_digital(option_type, S, K, r, q, sigma, T):
         return disc_r * norm_cdf(d2)
     else:  # Put
         return disc_r * norm_cdf(-d2)
+
+def _numerical_second_order(price_fn, S, sigma, T):
+    """Compute Volga, Vanna, Charm numerically from price_fn(S, sigma, T)."""
+    h_s = max(S * 1e-4, 1e-6)
+    h_v = 1e-4
+    h_t = 1.0 / 365.0
+
+    p0 = price_fn(S, sigma, T)
+
+    # Volga = d²V/dσ²
+    volga = (price_fn(S, sigma + h_v, T) - 2 * p0 + price_fn(S, sigma - h_v, T)) / (h_v ** 2)
+
+    # Vanna = d²V/dSdσ
+    vanna = (price_fn(S + h_s, sigma + h_v, T) - price_fn(S + h_s, sigma - h_v, T)
+           - price_fn(S - h_s, sigma + h_v, T) + price_fn(S - h_s, sigma - h_v, T)) / (4 * h_s * h_v)
+
+    # Charm = -dDelta/dT (delta decay as time passes)
+    if T > h_t:
+        delta_now  = (price_fn(S + h_s, sigma, T)      - price_fn(S - h_s, sigma, T))      / (2 * h_s)
+        delta_next = (price_fn(S + h_s, sigma, T - h_t) - price_fn(S - h_s, sigma, T - h_t)) / (2 * h_s)
+        charm = (delta_next - delta_now) / h_t
+    else:
+        charm = 0.0
+
+    return {"Volga": volga, "Vanna": vanna, "Charm": charm}
 
 def bs_greeks_digital(option_type, S, K, r, q, sigma, T):
     """Numerical greeks for digital options via finite differences."""
@@ -122,7 +151,8 @@ def bs_greeks_digital(option_type, S, K, r, q, sigma, T):
     rho = (bs_price_digital(option_type, S, K, r + h_r, q, sigma, T)
            - bs_price_digital(option_type, S, K, r - h_r, q, sigma, T)) / (2 * h_r)
 
-    return {"Delta": delta, "Gamma": gamma, "Vega": vega, "Theta": theta, "Rho": rho}
+    return {"Delta": delta, "Gamma": gamma, "Vega": vega, "Theta": theta, "Rho": rho,
+            **_numerical_second_order(lambda s, v, t: bs_price_digital(option_type, s, K, r, q, v, t), S, sigma, T)}
 
 def payoff_digital(product: str, S_T: float, K: float) -> float:
     if product == "Call":
@@ -207,7 +237,8 @@ def barrier_greeks(option_type, barrier_type, S, K, H, r, q, sigma, T):
     rho = (barrier_price(option_type, barrier_type, S, K, H, r + h_r, q, sigma, T)
            - barrier_price(option_type, barrier_type, S, K, H, r - h_r, q, sigma, T)) / (2 * h_r)
 
-    return {"Delta": delta, "Gamma": gamma, "Vega": vega, "Theta": theta, "Rho": rho}
+    return {"Delta": delta, "Gamma": gamma, "Vega": vega, "Theta": theta, "Rho": rho,
+            **_numerical_second_order(lambda s, v, t: barrier_price(option_type, barrier_type, s, K, H, r, q, v, t), S, sigma, T)}
 
 def payoff_barrier(option_type, barrier_type, S_T, K, H):
     """Approximate payoff at maturity (path-dependent, shown as best estimate)."""
@@ -265,7 +296,8 @@ def portfolio_price(legs: list[dict], S: float, r: float, q: float, sigma: float
     return total
 
 def portfolio_greeks(legs: list[dict], S: float, r: float, q: float, sigma: float) -> dict:
-    totals = {"Delta": 0.0, "Gamma": 0.0, "Vega": 0.0, "Theta": 0.0, "Rho": 0.0}
+    totals = {"Delta": 0.0, "Gamma": 0.0, "Vega": 0.0, "Theta": 0.0, "Rho": 0.0,
+              "Volga": 0.0, "Vanna": 0.0, "Charm": 0.0}
     for leg in legs:
         sign = 1.0 if leg["side"] == "Long" else -1.0
         qty = float(leg.get("qty", 1.0))
@@ -296,6 +328,9 @@ def build_portfolio_profile_vs_spot(legs: list[dict], Ss: list[float], r: float,
             "Vega": g["Vega"],
             "Theta": g["Theta"],
             "Rho": g["Rho"],
+            "Volga": g["Volga"],
+            "Vanna": g["Vanna"],
+            "Charm": g["Charm"],
         })
     return pd.DataFrame(rows).set_index("S").sort_index()
 
@@ -334,6 +369,9 @@ def build_greeks_profile_vs_spot(product, Ss, K, r, q, sigma, T, sign=1.0):
             "Vega":    sign * g["Vega"],
             "Theta":   sign * g["Theta"],
             "Rho":     sign * g["Rho"],
+            "Volga":   sign * g["Volga"],
+            "Vanna":   sign * g["Vanna"],
+            "Charm":   sign * g["Charm"],
         })
 
     df = pd.DataFrame(rows).set_index("S").sort_index()
