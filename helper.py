@@ -90,7 +90,7 @@ def bs_greeks(option_type, S, K, r, q, sigma, T):
     greeks.update(so)
     return greeks
 
-# -------- Digital (cash-or-nothing) Options ---------
+# -------- Digital Options ---------
 def bs_price_digital(option_type, S, K, r, q, sigma, T):
     d1, d2 = bs_d1_d2(S, K, r, q, sigma, T)
     if d1 is None:
@@ -102,7 +102,6 @@ def bs_price_digital(option_type, S, K, r, q, sigma, T):
         return disc_r * norm_cdf(-d2)
 
 def _numerical_second_order(price_fn, S, sigma, T):
-    """Compute Volga, Vanna, Charm numerically from price_fn(S, sigma, T)."""
     h_s = max(S * 1e-4, 1e-6)
     h_v = 1e-4
     h_t = 1.0 / 365.0
